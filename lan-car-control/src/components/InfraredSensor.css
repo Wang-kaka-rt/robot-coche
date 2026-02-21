@@ -1,0 +1,48 @@
+.infrared-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: #1e293b;
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.infrared-sensor {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #334155;
+  border: 2px solid #475569;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-weight: bold;
+  transition: all 0.2s ease;
+}
+
+.infrared-sensor.active {
+  background-color: #ef4444;
+  border-color: #f87171;
+  color: white;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+.infrared-value {
+  margin-top: 8px;
+  font-family: monospace;
+  color: #cbd5e1;
+}
+
+/* Layout for horizontal sensor array */
+.infrared-container {
+  flex-direction: row;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.infrared-value {
+  width: 100%;
+  text-align: center;
+}

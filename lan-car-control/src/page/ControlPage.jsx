@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Radar from '../components/Radar'
+import InfraredSensor from '../components/InfraredSensor'
 import './ControlPage.css'
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
@@ -136,6 +137,7 @@ function ControlPage() {
   const [wsPayloadPreview, setWsPayloadPreview] = useState('')
   const [wsSendPreview, setWsSendPreview] = useState('')
   const [ultrasonicRange, setUltrasonicRange] = useState(null)
+  const [infraredValue, setInfraredValue] = useState(0)
   const wsRef = useRef(null)
   const canvasRef = useRef(null)
   const chassisSendAtRef = useRef(0)
@@ -433,6 +435,10 @@ function ControlPage() {
     if ((op === 'publish' || op === 'message') && withLeadingSlash(payload.topic) === '/ultrasonic/range' && msg) {
       setUltrasonicRange(msg.range)
     }
+
+    if ((op === 'publish' || op === 'message') && withLeadingSlash(payload.topic) === '/line_sensor' && msg) {
+      setInfraredValue(msg.data)
+    }
   }
 
   const handleFragment = (payload) => {
@@ -554,6 +560,21 @@ function ControlPage() {
     socket.onopen = () => {
       setConnection('connected')
       setStatusText('已连接')
+
+      // Subscribe to ultrasonic
+      sendMessage({
+        op: 'subscribe',
+        topic: '/ultrasonic/range',
+        type: 'sensor_msgs/Range',
+      })
+
+      // Subscribe to line sensor
+      sendMessage({
+        op: 'subscribe',
+        topic: '/line_sensor',
+        type: 'std_msgs/UInt8',
+      })
+
       if (cameraOn) {
         cameraTopicRef.current = imageTopic
         subscribeCamera(imageTopic)
