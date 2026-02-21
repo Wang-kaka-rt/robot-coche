@@ -17,5 +17,12 @@ def generate_launch_description():
         output="screen",
     )
 
-    return LaunchDescription([car, camera])
+    rosbridge = Node(
+        package="rosbridge_server",
+        executable="rosbridge_websocket",
+        name="rosbridge_websocket",
+        output="screen",
+    )
+
+    return LaunchDescription([car, camera, rosbridge])
 

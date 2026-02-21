@@ -30,6 +30,7 @@ class CarBaseNode(Node):
         self.declare_parameter("duty_scale", 2000.0)
         self.declare_parameter("cmd_vel_timeout_s", 0.5)
         self.declare_parameter("servo_channel", "0")
+        self.declare_parameter("servo_channel_tilt", "1")
         self.declare_parameter("sensor_frame_id", "base_link")
         self.declare_parameter("ultrasonic.max_range_m", 3.0)
         self.declare_parameter("ultrasonic.min_range_m", 0.02)
@@ -44,6 +45,7 @@ class CarBaseNode(Node):
         self._duty_scale = float(self.get_parameter("duty_scale").value)
         self._cmd_vel_timeout_s = float(self.get_parameter("cmd_vel_timeout_s").value)
         self._servo_channel = str(self.get_parameter("servo_channel").value)
+        self._servo_channel_tilt = str(self.get_parameter("servo_channel_tilt").value)
         self._sensor_frame_id = str(self.get_parameter("sensor_frame_id").value)
         self._ultra_max_range_m = float(self.get_parameter("ultrasonic.max_range_m").value)
         self._ultra_min_range_m = float(self.get_parameter("ultrasonic.min_range_m").value)
@@ -65,6 +67,7 @@ class CarBaseNode(Node):
         self.create_subscription(Twist, "/cmd_vel", self._on_cmd_vel, 10)
         self.create_subscription(Bool, "/buzzer", self._on_buzzer, 10)
         self.create_subscription(Int32, "/servo_angle", self._on_servo_angle, 10)
+        self.create_subscription(Int32, "/servo_angle_tilt", self._on_servo_angle_tilt, 10)
         self.create_subscription(Int32, "/led_mode", self._on_led_mode, 10)
 
         self._pub_ultrasonic = self.create_publisher(Range, "/ultrasonic/range", 10)
@@ -117,6 +120,7 @@ class CarBaseNode(Node):
         self._apply_cmd_vel(linear_x, linear_y, angular_z)
 
     def _apply_cmd_vel(self, linear_x: float, linear_y: float, angular_z: float) -> None:
+        linear_x = -linear_x
         front_left = _clamp(linear_x - linear_y - angular_z, -1.0, 1.0)
         front_right = _clamp(linear_x + linear_y + angular_z, -1.0, 1.0)
         rear_left = _clamp(linear_x + linear_y - angular_z, -1.0, 1.0)
@@ -154,6 +158,14 @@ class CarBaseNode(Node):
             angle = int(msg.data)
             angle = int(_clamp(angle, 0, 180))
             self._car.servo.set_servo_pwm(self._servo_channel, angle)
+        except Exception:
+            pass
+
+    def _on_servo_angle_tilt(self, msg: Int32) -> None:
+        try:
+            angle = int(msg.data)
+            angle = int(_clamp(angle, 0, 180))
+            self._car.servo.set_servo_pwm(self._servo_channel_tilt, angle)
         except Exception:
             pass
 

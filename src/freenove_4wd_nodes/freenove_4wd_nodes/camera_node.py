@@ -3,6 +3,7 @@ import time
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import CompressedImage
 
 from freenove_4wd_nodes.camera_driver import Camera
@@ -14,7 +15,8 @@ class CameraNode(Node):
 
         self.declare_parameter("frame_id", "camera_link")
         self.declare_parameter("topic", "/image_raw/compressed")
-        self.declare_parameter("input_topic", "/camera/image_raw/compressed")
+        # 默认输入改为 "0"，表示直接读取硬件摄像头
+        self.declare_parameter("input_topic", "0")
         self.declare_parameter("stream_width", 400)
         self.declare_parameter("stream_height", 300)
         self.declare_parameter("hflip", False)
@@ -30,7 +32,8 @@ class CameraNode(Node):
         self._vflip = bool(self.get_parameter("vflip").value)
         self._publish_min_interval_s = float(self.get_parameter("publish_min_interval_s").value)
 
-        self._pub = self.create_publisher(CompressedImage, self._topic, 10)
+        qos_profile = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+        self._pub = self.create_publisher(CompressedImage, self._topic, qos_profile)
 
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
