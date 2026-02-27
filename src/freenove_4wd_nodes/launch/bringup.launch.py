@@ -12,7 +12,7 @@ def generate_launch_description():
 
     camera = Node(
         package="freenove_4wd_nodes",
-        executable="camera_node",
+        executable="libcamera_camera_node",
         name="camera",
         output="screen",
     )
@@ -25,4 +25,3 @@ def generate_launch_description():
     )
 
     return LaunchDescription([car, camera, rosbridge])
-

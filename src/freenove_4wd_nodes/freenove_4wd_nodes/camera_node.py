@@ -1,5 +1,6 @@
 import threading
 import time
+import traceback
 
 import rclpy
 from rclpy.node import Node
@@ -32,7 +33,9 @@ class CameraNode(Node):
         self._vflip = bool(self.get_parameter("vflip").value)
         self._publish_min_interval_s = float(self.get_parameter("publish_min_interval_s").value)
 
-        qos_profile = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+        # 使用 RELIABLE 以确保 rosbridge (WebSocket) 客户端能正常接收，
+        # 因为大多数 rosbridge 客户端默认使用 RELIABLE 订阅。
+        qos_profile = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
         self._pub = self.create_publisher(CompressedImage, self._topic, qos_profile)
 
         self._stop_event = threading.Event()
@@ -58,7 +61,7 @@ class CameraNode(Node):
             camera.start_stream()
             last_pub = 0.0
             while rclpy.ok() and (not self._stop_event.is_set()):
-                frame = camera.get_frame()
+                frame = camera.get_frame(timeout_s=1.0)
                 if frame is None:
                     continue
                 now = time.time()
@@ -73,7 +76,7 @@ class CameraNode(Node):
                 msg.data = frame
                 self._pub.publish(msg)
         except Exception:
-            pass
+            self.get_logger().error(traceback.format_exc())
         finally:
             if camera is not None:
                 try:

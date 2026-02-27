@@ -22,7 +22,7 @@ setup(
         "console_scripts": [
             "car_base_node = freenove_4wd_nodes.car_base_node:main",
             "camera_node = freenove_4wd_nodes.camera_node:main",
+            "libcamera_camera_node = freenove_4wd_nodes.libcamera_camera_node:main",
         ],
     },
 )
-

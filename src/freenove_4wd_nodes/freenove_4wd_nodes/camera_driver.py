@@ -1,6 +1,8 @@
 import time
 from threading import Condition
 import io
+import os
+import re
 
 import rclpy
 from rclpy.qos import QoSProfile, ReliabilityPolicy
@@ -47,6 +49,69 @@ class Camera:
         if not HAS_PIL and not HAS_CV2:
             self._node.get_logger().error("Neither PIL nor OpenCV found. Camera compression will fail.")
 
+    def _parse_device_spec(self):
+        s = (self._input_topic or "").strip()
+        if not s or s in ("0", "/0"):
+            return None
+        if re.fullmatch(r"\d+", s):
+            return int(s)
+        if s.startswith("/dev/video"):
+            return s
+        return None
+
+    def _candidate_devices(self):
+        if os.path.exists("/dev/video0"):
+            yield "/dev/video0"
+        for i in range(13, 24):
+            p = f"/dev/video{i}"
+            if os.path.exists(p):
+                yield p
+        for i in range(1, 33):
+            p = f"/dev/video{i}"
+            if os.path.exists(p):
+                yield p
+
+    def _open_capture(self, device, width: int, height: int):
+        if isinstance(device, str) and device.startswith("/dev/video"):
+            gst_pipeline = (
+                f"v4l2src device={device} ! "
+                f"video/x-raw, width={width}, height={height}, framerate=30/1 ! "
+                "videoconvert ! "
+                "video/x-raw, format=BGR ! "
+                "appsink drop=true sync=false"
+            )
+            cap = cv2.VideoCapture(gst_pipeline, cv2.CAP_GSTREAMER)
+            if cap.isOpened():
+                return cap, f"gstreamer:{device}"
+
+            cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
+            if cap.isOpened():
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+                return cap, f"v4l2:{device}"
+
+            cap = cv2.VideoCapture(device)
+            if cap.isOpened():
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+                return cap, f"default:{device}"
+
+            return None, None
+
+        cap = cv2.VideoCapture(int(device), cv2.CAP_V4L2)
+        if cap.isOpened():
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            return cap, f"v4l2:index{device}"
+
+        cap = cv2.VideoCapture(int(device))
+        if cap.isOpened():
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            return cap, f"default:index{device}"
+
+        return None, None
+
     def _compress_cv2_image(self, img) -> tuple:
         try:
             if self._hflip:
@@ -65,20 +130,39 @@ class Camera:
             return None, None
 
     def _capture_loop(self):
-        self._node.get_logger().info("Starting OpenCV VideoCapture(0)...")
-        # Try different backends
-        cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
-        if not cap.isOpened():
-             self._node.get_logger().warn("Failed to open /dev/video0 with V4L2, trying default backend...")
-             cap = cv2.VideoCapture(0)
+        self._node.get_logger().info("Starting Camera Capture...")
         
-        if not cap.isOpened():
-             self._node.get_logger().error("Failed to open /dev/video0")
-             return
+        w, h = self._preview_size
 
-        # Set resolution if possible
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._preview_size[0])
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._preview_size[1])
+        device_spec = self._parse_device_spec()
+        opened = None
+        opened_desc = None
+
+        if device_spec is None:
+            for dev in self._candidate_devices():
+                cap, desc = self._open_capture(dev, w, h)
+                if cap is None:
+                    continue
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    cap.release()
+                    continue
+                opened = cap
+                opened_desc = desc
+                break
+        else:
+            opened, opened_desc = self._open_capture(device_spec, w, h)
+
+        if opened is None or not opened.isOpened():
+            self._node.get_logger().error("Failed to open camera device")
+            return
+
+        cap = opened
+        self._node.get_logger().info(f"Camera opened: {opened_desc}")
+        
+        # Warmup for CSI camera auto-exposure
+        self._node.get_logger().info("Camera warming up (2s)...")
+        time.sleep(2.0)
         
         frame_count = 0
         while not self._stop_capture_event.is_set():
@@ -90,8 +174,14 @@ class Camera:
                 continue
             
             frame_count += 1
+            if frame_count == 1:
+                 self._node.get_logger().info(f"First frame captured: {frame.shape}, dtype={frame.dtype}")
+
             if frame_count % 300 == 0:
-                 self._node.get_logger().info(f"Captured {frame_count} frames successfully")
+                 avg_brightness = np.mean(frame)
+                 self._node.get_logger().info(f"Captured {frame_count} frames. Avg brightness: {avg_brightness:.1f}")
+                 if avg_brightness < 1.0:
+                     self._node.get_logger().warn("Frame is very dark! Check if camera is covered or not working.")
 
             compressed_data, fmt = self._compress_cv2_image(frame)
             if compressed_data:
@@ -198,8 +288,8 @@ class Camera:
             if filename is not None:
                 raise NotImplementedError("Recording to file is not supported with camera_ros input.")
             
-            # If input_topic is empty or "0", use hardware capture
-            if not self._input_topic or self._input_topic == "0" or self._input_topic == "/0":
+            device_spec = self._parse_device_spec()
+            if (not self._input_topic) or self._input_topic in ("0", "/0") or (device_spec is not None):
                  import threading
                  self._stop_capture_event = threading.Event()
                  self._capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
@@ -238,10 +328,11 @@ class Camera:
             except Exception as e:
                 print(f"Error stopping stream: {e}")
 
-    def get_frame(self) -> bytes:
+    def get_frame(self, timeout_s: float = 1.0) -> bytes:
         with self._condition:
-            while self._frame is None:
-                self._condition.wait()
+            if self._frame is not None:
+                return self._frame
+            self._condition.wait(timeout=timeout_s)
             return self._frame
 
     def get_format(self) -> str:
