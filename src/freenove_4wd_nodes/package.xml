@@ -17,6 +17,7 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
+  <exec_depend>rosbridge_server</exec_depend>
   <exec_depend>freenove_4wd_hw</exec_depend>
 
   <export>

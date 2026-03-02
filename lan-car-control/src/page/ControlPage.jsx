@@ -6,9 +6,9 @@ import './ControlPage.css'
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
 
-const MAX_LINEAR = 0.6
-const MAX_LATERAL = 0.6
-const MAX_ANGULAR = 1.2
+const MAX_LINEAR = 0.3
+const MAX_LATERAL = 0.3
+const MAX_ANGULAR = 0.6
 const SERVO_RANGE = 60
 
 const buildTwist = (linearX, linearY, angularZ) => ({
@@ -769,6 +769,21 @@ function ControlPage() {
             {cameraOn ? '关闭画面' : '开启画面'}
           </button>
         </div>
+        
+        <div className="camera-preview">
+          {imageSrc ? (
+            <img src={imageSrc} alt="camera" style={{ display: 'block', width: '100%' }} />
+          ) : (
+            <canvas
+              ref={canvasRef}
+              style={{ display: hasRawFrame ? 'block' : 'none', width: '100%' }}
+            />
+          )}
+          {!imageSrc && !hasRawFrame ? (
+            <div className="camera-placeholder">暂无画面</div>
+          ) : null}
+        </div>
+
         <div className="camera-config">
           <div className="field">
             <label>相机话题</label>
@@ -818,19 +833,6 @@ function ControlPage() {
               : '未获取'}
           </div>
           <div>(原始消息由 roslib 处理)</div>
-        </div>
-        <div className="camera-preview">
-          {imageSrc ? (
-            <img src={imageSrc} alt="camera" style={{ display: 'block' }} />
-          ) : (
-            <canvas
-              ref={canvasRef}
-              style={{ display: hasRawFrame ? 'block' : 'none' }}
-            />
-          )}
-          {!imageSrc && !hasRawFrame ? (
-            <div className="camera-placeholder">暂无画面</div>
-          ) : null}
         </div>
       </section>
     </div>
