@@ -55,12 +55,12 @@ class BallFollowerNode(Node):
         # --- Parameters ---
         self.declare_parameter('frame_width', 400)
         self.declare_parameter('frame_height', 300)
-        self.declare_parameter('linear_speed', 0.35)
-        self.declare_parameter('angular_speed', 0.5)
-        self.declare_parameter('min_card_size', 10)
-        self.declare_parameter('max_card_size', 80)
-        self.declare_parameter('target_card_size', 35)
-        self.declare_parameter('center_tolerance', 40)
+        self.declare_parameter('linear_speed', 0.20)
+        self.declare_parameter('angular_speed', 0.60)
+        self.declare_parameter('min_card_size', 6)
+        self.declare_parameter('max_card_size', 120)
+        self.declare_parameter('target_card_size', 85)
+        self.declare_parameter('center_tolerance', 55)
         self.declare_parameter('lost_timeout_s', 1.5)
         self.declare_parameter('search_timeout_s', 8.0)
         self.declare_parameter('obstacle_distance_m', 0.25)
@@ -82,6 +82,10 @@ class BallFollowerNode(Node):
         self.obstacle_critical = self.get_parameter('obstacle_critical_m').value
         self.low_battery_v = self.get_parameter('low_battery_v').value
         self.search_angular = self.get_parameter('search_angular_speed').value
+        self.max_tracking_angular = self.angular_spd
+        self.min_tracking_linear = self.linear_spd * 0.65
+        self.min_tracking_angular = self.angular_spd
+        self.error_alpha = 1.0
 
         # --- State ---
         self.state = RobotState.IDLE
@@ -90,6 +94,7 @@ class BallFollowerNode(Node):
         self.ball_position = Point()
         self.card_size = 0.0
         self.last_error_x = 0.0  # Remember which side card was last seen
+        self.filtered_error_x = 0.0
 
         self.obstacle_range = float('inf')
         self.battery_voltage = 0.0
@@ -281,34 +286,40 @@ class BallFollowerNode(Node):
     def _behavior_searching(self, last_error_x):
         # Rotate toward last known direction of card
         direction = 1.0 if last_error_x >= 0 else -1.0
-        self._send_command(0.0, 0.0, direction * self.search_angular)
+        search_turn = max(abs(self.search_angular), self.min_tracking_angular)
+        self._send_command(0.0, 0.0, direction * search_turn)
 
     def _behavior_tracking(self, position, card_size, obstacle, line_val):
         frame_center_x = self.frame_w / 2.0
+        drive_speed = self.linear_spd
 
-        # Card too large -> too close, back up slowly
+        # Card too large -> too close, back up with strong reverse power.
         if card_size > self.max_card_size:
-            self._send_command(-self.linear_spd * 0.4, 0.0, 0.0)
+            self._send_command(-drive_speed, 0.0, 0.0)
             return
 
-        # --- Angular: proportional control to center card in frame ---
-        # error_x is negative when ball is right of center → negative angular.z → turn right.
+        # Rudimentary left/center/right control with fixed power levels.
+        # This matches manual web control style better and avoids weak micro-commands.
         error_x = frame_center_x - position.x
-        angular_vel = (error_x / frame_center_x) * self.angular_spd
-
-        # --- Linear: distance-based speed control ---
         size_ratio = card_size / self.target_card_size
 
-        # turn_factor reduces speed only at full cruise speed; do NOT stack it on top of
-        # the size-ratio slow-down (0.5× or 0.2×), which would compound to nearly zero.
-        turn_factor = 1.0 - min(abs(error_x) / frame_center_x, 0.7)
-
-        if size_ratio > 1.3:
-            linear_vel = self.linear_spd * 0.2   # Too close: back-off speed, no extra damping
-        elif size_ratio > 1.0:
-            linear_vel = self.linear_spd * 0.5   # Slightly close: moderate speed, no extra damping
+        if abs(error_x) <= self.center_tol:
+            angular_vel = 0.0
+            # Discrete distance behavior (no gradual bands):
+            # far -> forward, near -> stop, too close -> backup (handled above).
+            if size_ratio < 2.5:
+                # More sensitive forward trigger so card can be closer and still chase.
+                linear_vel = drive_speed
+            else:
+                linear_vel = 0.0
+        elif error_x > 0.0:
+            # Card on left -> turn left with enough power to move wheels reliably.
+            angular_vel = self.angular_spd
+            linear_vel = drive_speed
         else:
-            linear_vel = self.linear_spd * turn_factor  # Normal cruise: dampen when turning hard
+            # Card on right -> turn right with enough power to move wheels reliably.
+            angular_vel = -self.angular_spd
+            linear_vel = drive_speed
 
         # Slow down near obstacles
         if obstacle < self.obstacle_dist:
@@ -323,12 +334,14 @@ class BallFollowerNode(Node):
         if line_val == 7:
             linear_vel = 0.0
             self.get_logger().debug('All infrared sensors triggered - edge detected')
+        elif linear_vel > 0.0 and linear_vel < self.min_tracking_linear:
+            linear_vel = self.min_tracking_linear
 
         self._send_command(linear_vel, 0.0, angular_vel)
 
     def _behavior_obstacle(self, obstacle):
         if obstacle < self.obstacle_critical:
-            self._send_command(-self.linear_spd * 0.5, 0.0, 0.0)
+            self._send_command(-self.linear_spd, 0.0, 0.0)
         else:
             self._send_command(0.0, 0.0, 0.0)
 
