@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+﻿﻿import { useEffect, useRef, useState } from 'react'
 import * as ROSLIB from 'roslib'
 import Radar from '../components/Radar'
 import InfraredSensor from '../components/InfraredSensor'
@@ -113,9 +113,9 @@ function ControlPage() {
   const [servoPan, setServoPan] = useState(90)
   const [servoTilt, setServoTilt] = useState(90)
   const [cameraOn, setCameraOn] = useState(false)
+  const [followingMode, setFollowingMode] = useState(false)
   const [imageSrc, setImageSrc] = useState('')
   const [hasRawFrame, setHasRawFrame] = useState(false)
-  // 默认为 /image_raw/compressed，与后端 camera_node.py 保持一致
   const [imageTopic, setImageTopic] = useState('/image_raw/compressed')
   const [cameraTopics, setCameraTopics] = useState([])
   const [cameraTypes, setCameraTypes] = useState({})
@@ -143,6 +143,7 @@ function ControlPage() {
   const cmdVelRef = useRef(null)
   const servoPanRef = useRef(null)
   const servoTiltRef = useRef(null)
+  const followEnableRef = useRef(null)
   const cameraListenerRef = useRef(null)
   
   const canvasRef = useRef(null)
@@ -167,6 +168,12 @@ function ControlPage() {
     }
     if (servoTiltRef.current) {
         servoTiltRef.current.publish({ data: tilt })
+    }
+  }
+
+  const publishFollowEnable = (enabled) => {
+    if (followEnableRef.current) {
+      followEnableRef.current.publish({ data: enabled })
     }
   }
 
@@ -381,7 +388,7 @@ function ControlPage() {
 
   const connect = () => {
     if (!wsHost) {
-      setStatusText('请输入机器人IP地址')
+      setStatusText('请输入机器人 IP 地址')
       return
     }
 
@@ -425,6 +432,12 @@ function ControlPage() {
         ros: ros,
         name: '/servo_angle_tilt',
         messageType: 'std_msgs/Int32'
+      })
+
+      followEnableRef.current = new ROSLIB.Topic({
+        ros: ros,
+        name: '/follow_enable',
+        messageType: 'std_msgs/Bool'
       })
 
       // Subscribe to sensors
@@ -473,6 +486,7 @@ function ControlPage() {
     if (rosRef.current) {
       rosRef.current.close()
     }
+    setFollowingMode(false)
   }
 
   const sendChassis = () => {
@@ -511,6 +525,23 @@ function ControlPage() {
     }
   }
 
+  const toggleFollowingMode = () => {
+    if (!isConnected) {
+      setStatusText('请先连接后再开启跟随模式')
+      return
+    }
+    const nextValue = !followingMode
+    setFollowingMode(nextValue)
+    publishFollowEnable(nextValue)
+    if (nextValue) {
+      setStatusText('跟随模式已开启')
+    } else {
+      publishChassis(0, 0, 0)
+      setStatusText('跟随模式已关闭')
+    }
+  }
+
+
   const applyCameraTopic = () => {
     if (!isConnected) {
       setStatusText('请先连接后再订阅')
@@ -523,7 +554,7 @@ function ControlPage() {
     subscribeCamera(imageTopic)
     setImageSrc('')
     setHasRawFrame(false)
-    setStatusText('相机话题已更新/重置')
+    setStatusText('相机话题已更新，已重置')
   }
 
   const requestTopics = () => {
@@ -548,7 +579,7 @@ function ControlPage() {
         })
         setCameraTopics(topics)
         setCameraTypes(mapping)
-        setStatusText('话题列表已更新')
+      setStatusText('话题列表已更新')
     }, (error) => {
         setStatusText('获取话题失败')
         console.error(error)
@@ -835,8 +866,21 @@ function ControlPage() {
           <div>(原始消息由 roslib 处理)</div>
         </div>
       </section>
+
+      <section className="card following-mode-card">
+        <div className="camera-header">
+          <h2>自主跟随</h2>
+          <button className="primary" onClick={toggleFollowingMode}>
+            {followingMode ? '关闭跟随' : '开启跟随'}
+          </button>
+        </div>
+        <div className="status-info">
+          <div>状态：{followingMode ? '运行中' : '已停止'}</div>
+        </div>
+      </section>
     </div>
   )
 }
 
 export default ControlPage
+

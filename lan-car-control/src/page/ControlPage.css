@@ -1,4 +1,4 @@
-.page {
+﻿.page {
   min-height: 100vh;
   padding: 32px 32px 48px;
   display: flex;
@@ -307,4 +307,30 @@ button {
   .slider-row span {
     justify-self: end;
   }
+}
+
+
+/* Following Mode Card */
+.following-mode-card {
+  margin-top: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.following-mode-card h2 {
+  color: white;
+  margin: 0;
+  font-size: 18px;
+}
+
+.following-mode-card .status-info {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.following-mode-card .status-info div {
+  margin: 4px 0;
 }

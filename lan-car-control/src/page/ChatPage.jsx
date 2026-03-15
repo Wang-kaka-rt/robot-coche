@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as ROSLIB from 'roslib'
 import './ControlPage.css' // Reuse control page styles for now
 
@@ -11,8 +11,6 @@ function ChatPage() {
   
   // Camera State
   const [imageSrc, setImageSrc] = useState('')
-  const [hasRawFrame, setHasRawFrame] = useState(false)
-  const [cameraOn, setCameraOn] = useState(false)
   
   // Chat State
   const [chatMessages, setChatMessages] = useState([])
@@ -21,8 +19,6 @@ function ChatPage() {
 
   const rosRef = useRef(null)
   const cameraListenerRef = useRef(null)
-  const canvasRef = useRef(null)
-
   const cmdVelRef = useRef(null)
 
   // Load IP from local storage on mount
@@ -33,17 +29,29 @@ function ChatPage() {
     }
   }, [])
 
-  // Auto connect if IP is available
-  useEffect(() => {
-      if (wsHost && connection === 'disconnected') {
-          connect()
+  const subscribeCamera = useCallback((topic) => {
+    if (!rosRef.current) return
+
+    if (cameraListenerRef.current) {
+      cameraListenerRef.current.unsubscribe()
+    }
+
+    const listener = new ROSLIB.Topic({
+      ros: rosRef.current,
+      name: topic,
+      messageType: 'sensor_msgs/CompressedImage'
+    })
+
+    listener.subscribe((message) => {
+      if (message.format && message.data) {
+        setImageSrc('data:image/jpeg;base64,' + message.data)
       }
-      return () => {
-          if (rosRef.current) rosRef.current.close()
-      }
+    })
+
+    cameraListenerRef.current = listener
   }, [])
 
-  const connect = () => {
+  const connect = useCallback(() => {
     if (!wsHost) {
       setStatusText('请输入机器人IP地址')
       return
@@ -72,7 +80,6 @@ function ChatPage() {
       setConnection('connected')
       setStatusText('已连接')
       // Auto start camera on connect
-      setCameraOn(true)
       subscribeCamera('/image_raw/compressed')
       
       // Init cmd_vel publisher
@@ -83,7 +90,7 @@ function ChatPage() {
       })
     })
 
-    ros.on('error', (error) => {
+    ros.on('error', () => {
       setConnection('error')
       setStatusText('连接错误')
     })
@@ -94,31 +101,19 @@ function ChatPage() {
     })
 
     rosRef.current = ros
-  }
+  }, [subscribeCamera, wsHost])
 
-  const subscribeCamera = (topic) => {
-    if (!rosRef.current) return
-
-    if (cameraListenerRef.current) {
-        cameraListenerRef.current.unsubscribe()
+  useEffect(() => {
+    if (wsHost && connection === 'disconnected') {
+      connect()
     }
+  }, [wsHost, connection, connect])
 
-    const listener = new ROSLIB.Topic({
-        ros: rosRef.current,
-        name: topic,
-        messageType: 'sensor_msgs/CompressedImage'
-    })
-
-    listener.subscribe((message) => {
-        // Handle CompressedImage (JPEG)
-        if (message.format && message.data) {
-            setImageSrc('data:image/jpeg;base64,' + message.data)
-            setHasRawFrame(false)
-        }
-    })
-
-    cameraListenerRef.current = listener
-  }
+  useEffect(() => {
+    return () => {
+      if (rosRef.current) rosRef.current.close()
+    }
+  }, [])
 
   const executeCommand = (action) => {
     if (!cmdVelRef.current) return
@@ -286,7 +281,6 @@ function ChatPage() {
       </header>
 
       <div className="main-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        {/* Camera Section */}
         <section className="card camera-card" style={{ padding: '0', overflow: 'hidden' }}>
             <div className="camera-preview" style={{ background: '#000', minHeight: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {imageSrc ? (
@@ -297,7 +291,6 @@ function ChatPage() {
             </div>
         </section>
 
-        {/* Chat Section */}
         <section className="card chat-card" style={{ display: 'flex', flexDirection: 'column', height: '400px' }}>
             <div className="chat-history" style={{ 
                 flex: 1,

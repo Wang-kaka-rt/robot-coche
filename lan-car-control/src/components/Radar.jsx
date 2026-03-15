@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import './Radar.css';
 
-const Radar = ({ range, maxRange = 3.0, fov = 0.5 }) => {
+const Radar = ({ range, maxRange = 3.0 }) => {
   const canvasRef = useRef(null);
   const rangeRef = useRef(range);
 

@@ -1,0 +1,98 @@
+# Object Tracking Parameters Configuration
+# This file contains recommended parameter settings for different scenarios
+
+# ============================================
+# Scenario 1: Indoor tracking (good lighting)
+# ============================================
+indoor_good_light:
+  target_object_size: 60.0
+  center_tolerance: 30.0
+  angular_kp: 0.015
+  angular_ki: 0.0005
+  angular_kd: 0.0001
+  linear_kp: 0.008
+  linear_ki: 0.0002
+  linear_kd: 0.00005
+  max_linear_speed: 0.25
+  max_angular_speed: 0.8
+
+# ============================================
+# Scenario 2: Indoor tracking (poor lighting)
+# ============================================
+indoor_poor_light:
+  target_object_size: 70.0  # Larger target for more stable detection
+  center_tolerance: 40.0    # More tolerance for detection jitter
+  angular_kp: 0.012         # Slower response to avoid oscillations
+  angular_ki: 0.0003
+  angular_kd: 0.0002        # More damping
+  linear_kp: 0.006
+  linear_ki: 0.0001
+  linear_kd: 0.0001
+  max_linear_speed: 0.20    # Slower for safety
+  max_angular_speed: 0.6
+
+# ============================================
+# Scenario 3: Outdoor tracking
+# ============================================
+outdoor:
+  target_object_size: 65.0
+  center_tolerance: 35.0
+  angular_kp: 0.018         # Faster response for outdoor dynamics
+  angular_ki: 0.0006
+  angular_kd: 0.00015
+  linear_kp: 0.010
+  linear_ki: 0.0003
+  linear_kd: 0.00008
+  max_linear_speed: 0.30    # Higher speed for open spaces
+  max_angular_speed: 1.0
+  obstacle_distance_m: 0.4  # Earlier obstacle detection
+  obstacle_critical_m: 0.2
+
+# ============================================
+# Scenario 4: High precision tracking
+# ============================================
+high_precision:
+  target_object_size: 60.0
+  center_tolerance: 20.0    # Tighter tolerance
+  angular_kp: 0.020         # Higher gains for precision
+  angular_ki: 0.0008
+  angular_kd: 0.0002
+  linear_kp: 0.012
+  linear_ki: 0.0004
+  linear_kd: 0.0001
+  max_linear_speed: 0.15    # Slower for precision
+  max_angular_speed: 0.5
+
+# ============================================
+# Scenario 5: Fast tracking (aggressive)
+# ============================================
+fast_tracking:
+  target_object_size: 55.0
+  center_tolerance: 25.0
+  angular_kp: 0.025         # High gains for fast response
+  angular_ki: 0.001
+  angular_kd: 0.0001
+  linear_kp: 0.015
+  linear_ki: 0.0005
+  linear_kd: 0.00005
+  max_linear_speed: 0.35    # Maximum speed
+  max_angular_speed: 1.2
+  lost_timeout_s: 1.0       # Quick transition to search
+  search_timeout_s: 5.0
+
+# ============================================
+# Scenario 6: Conservative (safe) tracking
+# ============================================
+conservative:
+  target_object_size: 65.0
+  center_tolerance: 40.0
+  angular_kp: 0.010         # Lower gains for smooth motion
+  angular_ki: 0.0002
+  angular_kd: 0.0003
+  linear_kp: 0.005
+  linear_ki: 0.0001
+  linear_kd: 0.00015
+  max_linear_speed: 0.15    # Slow and safe
+  max_angular_speed: 0.4
+  obstacle_distance_m: 0.5  # Early obstacle detection
+  obstacle_critical_m: 0.25
